@@ -15,9 +15,32 @@ exports.login = async(req, res, next) => {
     const errors = validationResult(req)
     if (!errors.isEmpty()) throw(errors.array()[0].msg);
 
-    console.log('admin auth')
+    const [findUser] = await sequelize.query(
+      `SELECT au.id, au.name, au.password, au.phone, r.name as role
+      FROM admin_users au
+      JOIN roles r on au.role_id = r.id
+      WHERE au.phone = :phone`, {
+        replacements: { phone: req.body.phone },
+        type: sequelize.QueryTypes.SELECT
+      }
+    )
 
-    data = "admin auth"
+    if(!findUser) throw new Error('Invalid User')
+
+    const checkPassword = await bcryptjs.compare(req.body.password, findUser.password)
+    
+    if(!checkPassword) throw new Error('Phone / Password Invalid')
+
+    const authData = {
+      user_id: findUser.id,
+      name: findUser.name,
+      phone: findUser.phone,
+      role: findUser.role
+    }
+
+    const token = jwt.sign(authData, configJwt.secret);
+
+    data = { ...authData, token: token }
     status = true
 
   } catch (err) {
@@ -42,8 +65,9 @@ exports.signup = async(req, res, next) => {
     const [checkName] = await sequelize.query(
       `SELECT *
       FROM admin_users au
-      WHERE au.name = :name`, {
-        replacements: { name: req.body.name }
+      WHERE au.name = :name
+        AND au.phone = :phone`, {
+        replacements: { name: req.body.name, phone: req.body.phone }
       }
     )
 
